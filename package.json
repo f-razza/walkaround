@@ -1,0 +1,43 @@
+{
+  "name": "walkaround",
+  "version": "0.0.1",
+  "description": "Post-flight inspection for AI coding sessions: parse Claude Code transcripts and report what the agent actually did to your codebase.",
+  "keywords": [
+    "claude-code",
+    "ai",
+    "agent",
+    "transcript",
+    "metrics",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "Federico (DevByFede)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "walkaround": "dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^3.0.0"
+  }
+}
