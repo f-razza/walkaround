@@ -1,0 +1,8 @@
+{"type":"user","uuid":"q-h1","parentUuid":null,"sessionId":"bbbbbbbb-0000-4000-8000-000000000002","timestamp":"2025-03-11T10:00:00.000Z","cwd":"/home/dev/acme-rocket","gitBranch":"main","version":"2.0.1","isSidechain":false,"userType":"external","message":{"role":"user","content":"Quick question about the engine"}}
+{"type":"assistant","uuid":"qa1","parentUuid":"q-h1","sessionId":"bbbbbbbb-0000-4000-8000-000000000002","timestamp":"2025-03-11T10:00:05.000Z","cwd":"/home/dev/acme-rocket","gitBranch":"main","version":"2.0.1","isSidechain":false,"requestId":"req_q1","message":{"id":"msg_q1","type":"message","role":"assistant","model":"claude-test-1","content":[{"type":"text","text":"It is fine."}],"usage":{"input_tokens":10,"output_tokens":20,"cache_read_input_tokens":30,"cache_creation_input_tokens":40}}}
+{"type":"wibble","sessionId":"bbbbbbbb-0000-4000-8000-000000000002","payload":{"x":1}}
+{"type":"wibble","sessionId":"bbbbbbbb-0000-4000-8000-000000000002"}
+{"type":"telemetry-blob","sessionId":"bbbbbbbb-0000-4000-8000-000000000002","blob":"AAAA"}
+{"type":"assistant","message":{
+{"sessionId":"bbbbbbbb-0000-4000-8000-000000000002","uuid":"nt1"}
+[1,2,3]
