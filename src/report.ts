@@ -104,7 +104,7 @@ function sessionsTable(sessions: SessionMetrics[]): string {
       "  ",
       cells[0].padEnd(12),
       cells[1].padEnd(10),
-      cells[2].padStart(8),
+      cells[2].padStart(12),
       cells[3].padStart(9),
       cells[4].padStart(12),
       cells[5].padStart(12),

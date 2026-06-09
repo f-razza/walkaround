@@ -30,8 +30,8 @@ aggregate | 1 session | total agent time 6 min
   mcp calls      0 | sidechain events: 0
   top churn      src/thruster.ts x2, tests/thruster.test.ts x1
 
-  date        id        duration  prompts  tokens out  tool calls  errors
-  2025-03-10  aaaaaaaa     6 min        2         710           5       0
+  date        id            duration  prompts  tokens out  tool calls  errors
+  2025-03-10  aaaaaaaa         6 min        2         710           5       0
 "
 `;
 
@@ -104,10 +104,10 @@ aggregate | 4 sessions | total agent time 10 min
   mcp calls      1 | sidechain events: 2
   top churn      src/core.ts x3, src/thruster.ts x2, tests/thruster.test.ts x1
 
-  date        id        duration  prompts  tokens out  tool calls  errors
-  2025-03-10  aaaaaaaa     6 min        2         710           5       0
-  2025-03-11  bbbbbbbb       5 s        1          20           0       0
-  2025-03-12  cccccccc      50 s        1          20           4       4
-  2025-03-13  dddddddd     3 min        1          50           4       0
+  date        id            duration  prompts  tokens out  tool calls  errors
+  2025-03-10  aaaaaaaa         6 min        2         710           5       0
+  2025-03-11  bbbbbbbb           5 s        1          20           0       0
+  2025-03-12  cccccccc          50 s        1          20           4       4
+  2025-03-13  dddddddd         3 min        1          50           4       0
 "
 `;
