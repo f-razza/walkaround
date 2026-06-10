@@ -7,6 +7,7 @@ import {
   defaultProjectsDir,
   discoverAll,
   discoverForRepo,
+  listSubagentFiles,
   type SessionFileInfo,
 } from "./discover.js";
 import { aggregateMetrics, computeSessionMetrics, type SessionMetrics } from "./metrics.js";
@@ -60,7 +61,16 @@ async function loadSession(info: SessionFileInfo): Promise<SessionMetrics | unde
   } catch {
     return undefined;
   }
-  return computeSessionMetrics(parseSession(text), info.filePath);
+  const subagents: SessionMetrics[] = [];
+  for (const subFile of await listSubagentFiles(info.filePath)) {
+    try {
+      const subText = await readFile(subFile, "utf8");
+      subagents.push(computeSessionMetrics(parseSession(subText), subFile));
+    } catch {
+      // A vanished or unreadable subagent transcript never blocks the session.
+    }
+  }
+  return computeSessionMetrics(parseSession(text), info.filePath, subagents);
 }
 
 async function buildReport(repo: string, files: SessionFileInfo[]): Promise<RepoReport> {

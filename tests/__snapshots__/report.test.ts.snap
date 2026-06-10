@@ -13,9 +13,10 @@ session aaaaaaaa | 2025-03-10 09:00 UTC | 6 min | branch main | claude-test-1
   files touched  3
   top churn      src/thruster.ts x2, tests/thruster.test.ts x1
   lines written  4 source / 5 test
-  test runs      1
+  test runs      1, none failed
   errors         0 tool, 0 api | retry chains: 0
   sidechain      0% of events | mcp: 0 calls
+  subagents      none
   skipped        8 known, 0 unknown, 0 malformed
 
 aggregate | 1 session | total agent time 6 min
@@ -25,9 +26,10 @@ aggregate | 1 session | total agent time 6 min
   reads/writes   1 read vs 3 writes
   files touched  3 unique
   lines written  4 source / 5 test (0.8:1 source:test)
-  test runs      1
+  test runs      1, none failed
   errors         0 tool, 0 api | retry chains: 0
   mcp calls      0 | sidechain events: 0
+  subagents      none
   top churn      src/thruster.ts x2, tests/thruster.test.ts x1
 
   date        id            duration  prompts  tokens out  tool calls  errors
@@ -48,9 +50,10 @@ session aaaaaaaa | 2025-03-10 09:00 UTC | 6 min | branch main | claude-test-1
   files touched  3
   top churn      src/thruster.ts x2, tests/thruster.test.ts x1
   lines written  4 source / 5 test
-  test runs      1
+  test runs      1, none failed
   errors         0 tool, 0 api | retry chains: 0
   sidechain      0% of events | mcp: 0 calls
+  subagents      none
   skipped        8 known, 0 unknown, 0 malformed
 
 session bbbbbbbb | 2025-03-11 10:00 UTC | 5 s | branch main | claude-test-1
@@ -64,6 +67,7 @@ session bbbbbbbb | 2025-03-11 10:00 UTC | 5 s | branch main | claude-test-1
   test runs      0
   errors         0 tool, 0 api | retry chains: 0
   sidechain      0% of events | mcp: 0 calls
+  subagents      none
   skipped        0 known, 4 unknown, 2 malformed (unknown types: wibble x2, telemetry-blob x1, (missing) x1)
 
 session cccccccc | 2025-03-12 11:00 UTC | 50 s | branch main | claude-test-1
@@ -74,9 +78,10 @@ session cccccccc | 2025-03-12 11:00 UTC | 50 s | branch main | claude-test-1
   files touched  1
   top churn      src/core.ts x3
   lines written  1 source / 0 test
-  test runs      1
+  test runs      1 (1 failed)
   errors         3 tool, 1 api | retry chains: 1
   sidechain      0% of events | mcp: 0 calls
+  subagents      none
   skipped        0 known, 0 unknown, 0 malformed
 
 session dddddddd | 2025-03-13 12:00 UTC | 3 min | branch feature/mcp | claude-test-1
@@ -90,6 +95,7 @@ session dddddddd | 2025-03-13 12:00 UTC | 3 min | branch feature/mcp | claude-te
   test runs      0
   errors         0 tool, 0 api | retry chains: 0
   sidechain      23% of events | mcp: 2 calls (rocketdb, telemetry)
+  subagents      none
   skipped        0 known, 0 unknown, 0 malformed
 
 aggregate | 4 sessions | total agent time 10 min
@@ -99,9 +105,10 @@ aggregate | 4 sessions | total agent time 10 min
   reads/writes   2 reads vs 6 writes
   files touched  5 unique
   lines written  5 source / 5 test (1.0:1 source:test)
-  test runs      2
+  test runs      2 (1 failed)
   errors         3 tool, 1 api | retry chains: 1
   mcp calls      2 | sidechain events: 3
+  subagents      none
   top churn      src/core.ts x3, src/thruster.ts x2, tests/thruster.test.ts x1
 
   date        id            duration  prompts  tokens out  tool calls  errors

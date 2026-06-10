@@ -26,6 +26,112 @@ export interface RetryChain {
   length: number;
 }
 
+export interface TestRunStats {
+  total: number;
+  /** Runs whose result came back error-flagged (non-zero exit). */
+  failed: number;
+}
+
+/** Sums over a session's subagent transcripts, kept apart from the headline numbers. */
+export interface SubagentRollup {
+  transcripts: number;
+  tokens: TokenUsage;
+  toolCounts: Record<string, number>;
+  totalToolCalls: number;
+  reads: number;
+  writes: number;
+  uniqueFilesTouched: number;
+  linesWritten: { source: number; test: number };
+  testRuns: TestRunStats;
+  errors: { toolErrors: number; apiErrors: number };
+  retryChains: number;
+  models: string[];
+}
+
+export function emptySubagentRollup(): SubagentRollup {
+  return {
+    transcripts: 0,
+    tokens: { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 },
+    toolCounts: Object.create(null) as Record<string, number>,
+    totalToolCalls: 0,
+    reads: 0,
+    writes: 0,
+    uniqueFilesTouched: 0,
+    linesWritten: { source: 0, test: 0 },
+    testRuns: { total: 0, failed: 0 },
+    errors: { toolErrors: 0, apiErrors: 0 },
+    retryChains: 0,
+    models: [],
+  };
+}
+
+/**
+ * Roll subagent transcripts (each parsed with the same session machinery)
+ * into one summary. Prompts and durations are deliberately dropped: a
+ * subagent's first user line is its parent's task, not a human prompt.
+ */
+export function rollupSubagents(subs: SessionMetrics[]): SubagentRollup {
+  const rollup = emptySubagentRollup();
+  const files = new Set<string>();
+  const models = new Set<string>();
+  for (const s of subs) {
+    rollup.transcripts++;
+    rollup.tokens.input += s.tokens.input;
+    rollup.tokens.output += s.tokens.output;
+    rollup.tokens.cacheRead += s.tokens.cacheRead;
+    rollup.tokens.cacheCreation += s.tokens.cacheCreation;
+    for (const [name, count] of Object.entries(s.toolCounts)) {
+      rollup.toolCounts[name] = (rollup.toolCounts[name] ?? 0) + count;
+    }
+    rollup.totalToolCalls += s.totalToolCalls;
+    rollup.reads += s.reads;
+    rollup.writes += s.writes;
+    for (const f of s.filesTouched) files.add(f);
+    rollup.linesWritten.source += s.linesWritten.source;
+    rollup.linesWritten.test += s.linesWritten.test;
+    rollup.testRuns.total += s.testRuns.total;
+    rollup.testRuns.failed += s.testRuns.failed;
+    rollup.errors.toolErrors += s.errors.toolErrors;
+    rollup.errors.apiErrors += s.errors.apiErrors;
+    rollup.retryChains += s.retryChains.length;
+    for (const m of s.models) models.add(m);
+  }
+  rollup.uniqueFilesTouched = files.size;
+  rollup.models = [...models].sort();
+  return rollup;
+}
+
+function mergeSubagentRollups(rollups: SubagentRollup[]): SubagentRollup {
+  const merged = emptySubagentRollup();
+  const models = new Set<string>();
+  for (const r of rollups) {
+    merged.transcripts += r.transcripts;
+    merged.tokens.input += r.tokens.input;
+    merged.tokens.output += r.tokens.output;
+    merged.tokens.cacheRead += r.tokens.cacheRead;
+    merged.tokens.cacheCreation += r.tokens.cacheCreation;
+    for (const [name, count] of Object.entries(r.toolCounts)) {
+      merged.toolCounts[name] = (merged.toolCounts[name] ?? 0) + count;
+    }
+    merged.totalToolCalls += r.totalToolCalls;
+    merged.reads += r.reads;
+    merged.writes += r.writes;
+    // File lists are not kept per rollup; the merged count is a lower bound
+    // when the same file is touched by subagents of different sessions.
+    merged.uniqueFilesTouched += r.uniqueFilesTouched;
+    merged.linesWritten.source += r.linesWritten.source;
+    merged.linesWritten.test += r.linesWritten.test;
+    merged.testRuns.total += r.testRuns.total;
+    merged.testRuns.failed += r.testRuns.failed;
+    merged.errors.toolErrors += r.errors.toolErrors;
+    merged.errors.apiErrors += r.errors.apiErrors;
+    merged.retryChains += r.retryChains;
+    for (const m of r.models) models.add(m);
+  }
+  merged.models = [...models].sort();
+  return merged;
+}
+
 export interface SessionMetrics {
   sessionId: string;
   shortId: string;
@@ -45,11 +151,12 @@ export interface SessionMetrics {
   filesTouched: string[];
   churn: ChurnEntry[];
   linesWritten: { source: number; test: number };
-  testRuns: number;
+  testRuns: TestRunStats;
   errors: { toolErrors: number; apiErrors: number };
   retryChains: RetryChain[];
   sidechain: { events: number; share: number };
   mcp: { calls: number; share: number; servers: string[] };
+  subagents: SubagentRollup;
   parse: ParseStats;
 }
 
@@ -65,11 +172,12 @@ export interface AggregateMetrics {
   uniqueFilesTouched: number;
   topChurn: ChurnEntry[];
   linesWritten: { source: number; test: number };
-  testRuns: number;
+  testRuns: TestRunStats;
   errors: { toolErrors: number; apiErrors: number };
   retryChains: number;
   mcpCalls: number;
   sidechainEvents: number;
+  subagents: SubagentRollup;
   versionRange?: { min: string; max: string };
   /** Per-session metrics sorted by start time ascending. */
   sessions: SessionMetrics[];
@@ -132,7 +240,11 @@ function resolveResultCall(
   };
 }
 
-export function computeSessionMetrics(parsed: ParsedSession, filePath: string): SessionMetrics {
+export function computeSessionMetrics(
+  parsed: ParsedSession,
+  filePath: string,
+  subagentMetrics: SessionMetrics[] = [],
+): SessionMetrics {
   const { events, stats } = parsed;
 
   let sessionId: string | undefined;
@@ -161,7 +273,6 @@ export function computeSessionMetrics(parsed: ParsedSession, filePath: string): 
   const churnCounts = new Map<string, number>();
   let mcpCalls = 0;
   const mcpServers = new Set<string>();
-  let testRuns = 0;
   let apiErrors = 0;
   let toolErrors = 0;
   let humanPrompts = 0;
@@ -176,6 +287,8 @@ export function computeSessionMetrics(parsed: ParsedSession, filePath: string): 
   }
   const writesByToolUseId = new Map<string, PendingWrite>();
   const unkeyedWrites: PendingWrite[] = [];
+  const testRuns: TestRunStats = { total: 0, failed: 0 };
+  const testRunToolUseIds = new Set<string>();
   const orderedResults: Array<{ tool?: string; filePath?: string; isError: boolean }> = [];
 
   for (const event of events) {
@@ -253,7 +366,10 @@ export function computeSessionMetrics(parsed: ParsedSession, filePath: string): 
           else unkeyedWrites.push(pending);
         }
         if (call.name === "Bash" && typeof call.input.command === "string") {
-          if (isTestCommand(call.input.command)) testRuns++;
+          if (isTestCommand(call.input.command)) {
+            testRuns.total++;
+            if (call.id !== undefined) testRunToolUseIds.add(call.id);
+          }
         }
       }
     } else {
@@ -264,6 +380,7 @@ export function computeSessionMetrics(parsed: ParsedSession, filePath: string): 
           if (toolUseId !== undefined) {
             const pending = writesByToolUseId.get(toolUseId);
             if (pending) pending.failed = true;
+            if (testRunToolUseIds.has(toolUseId)) testRuns.failed++;
           }
         }
         orderedResults.push({
@@ -356,6 +473,7 @@ export function computeSessionMetrics(parsed: ParsedSession, filePath: string): 
       share: totalToolCalls === 0 ? 0 : mcpCalls / totalToolCalls,
       servers: [...mcpServers].sort(),
     },
+    subagents: rollupSubagents(subagentMetrics),
     parse: stats,
   };
 }
@@ -384,11 +502,12 @@ export function aggregateMetrics(sessions: SessionMetrics[]): AggregateMetrics {
     uniqueFilesTouched: 0,
     topChurn: [],
     linesWritten: { source: 0, test: 0 },
-    testRuns: 0,
+    testRuns: { total: 0, failed: 0 },
     errors: { toolErrors: 0, apiErrors: 0 },
     retryChains: 0,
     mcpCalls: 0,
     sidechainEvents: 0,
+    subagents: emptySubagentRollup(),
     sessions: sorted,
   };
 
@@ -411,7 +530,8 @@ export function aggregateMetrics(sessions: SessionMetrics[]): AggregateMetrics {
     }
     agg.linesWritten.source += s.linesWritten.source;
     agg.linesWritten.test += s.linesWritten.test;
-    agg.testRuns += s.testRuns;
+    agg.testRuns.total += s.testRuns.total;
+    agg.testRuns.failed += s.testRuns.failed;
     agg.errors.toolErrors += s.errors.toolErrors;
     agg.errors.apiErrors += s.errors.apiErrors;
     agg.retryChains += s.retryChains.length;
@@ -423,5 +543,6 @@ export function aggregateMetrics(sessions: SessionMetrics[]): AggregateMetrics {
   agg.uniqueFilesTouched = touched.size;
   agg.topChurn = sortChurn(churnCounts).slice(0, 10);
   agg.versionRange = versionRangeOf(versions);
+  agg.subagents = mergeSubagentRollups(sorted.map((s) => s.subagents));
   return agg;
 }

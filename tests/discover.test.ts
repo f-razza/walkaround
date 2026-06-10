@@ -2,7 +2,12 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { discoverAll, discoverForRepo, listSessionFiles } from "../src/discover.js";
+import {
+  discoverAll,
+  discoverForRepo,
+  listSessionFiles,
+  listSubagentFiles,
+} from "../src/discover.js";
 
 function line(fields: Record<string, unknown>): string {
   return JSON.stringify(fields) + "\n";
@@ -108,6 +113,23 @@ describe("discoverForRepo", () => {
     } finally {
       rmSync(scratch, { recursive: true, force: true });
     }
+  });
+});
+
+describe("listSubagentFiles", () => {
+  it("finds flat and workflow-nested subagent transcripts", async () => {
+    const dirA = join(projects, "-home-dev-somewhere-else");
+    const nested = join(dirA, "s1", "subagents", "workflows", "wf_synthetic");
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(nested, "agent-y.jsonl"), userLine("s1", "/synthetic/repo-a"));
+    const files = await listSubagentFiles(join(dirA, "s1.jsonl"));
+    const names = files.map((f) => f.split("/").pop());
+    expect(names).toEqual(["agent-y.jsonl", "agent-x.jsonl"].sort());
+  });
+
+  it("returns [] when the session has no subagents directory", async () => {
+    const dirB = join(projects, "-synthetic-repo-b");
+    expect(await listSubagentFiles(join(dirB, "s2.jsonl"))).toEqual([]);
   });
 });
 

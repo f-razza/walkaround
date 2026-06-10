@@ -5,6 +5,7 @@ export {
   discoverForRepo,
   inspectSessionFile,
   listSessionFiles,
+  listSubagentFiles,
   type SessionFileInfo,
 } from "./discover.js";
 export {
@@ -20,10 +21,14 @@ export {
 export {
   aggregateMetrics,
   computeSessionMetrics,
+  emptySubagentRollup,
+  rollupSubagents,
   type AggregateMetrics,
   type ChurnEntry,
   type RetryChain,
   type SessionMetrics,
+  type SubagentRollup,
+  type TestRunStats,
 } from "./metrics.js";
 export { renderText, reportToJson, type RepoReport } from "./report.js";
 export type {

@@ -44,11 +44,12 @@ Per session, and aggregated across sessions:
 | files touched | Unique `file_path` values across read and write tools |
 | top churn | Files with the most write attempts — failed attempts count, because hammering a file is signal |
 | lines written | Line count of write payloads that did **not** come back as an error, split source vs test by path (`*.test.*`, `*.spec.*`, `__tests__/`, `tests/`, `test/`) |
-| test runs | Bash commands invoking `npm test`, `vitest`, `jest`, `pytest`, `go test` or `cargo test` |
+| test runs | Bash commands invoking `npm test`, `vitest`, `jest`, `pytest`, `go test` or `cargo test`; a run counts as failed when its result comes back error-flagged (non-zero exit) |
 | errors | Tool results flagged `is_error` plus API-error assistant lines |
 | retry chains | Runs of >= 2 consecutive failed results for the same tool on the same file |
 | sidechain | Share of events flagged as sidechain (subagent) traffic |
 | mcp | Tool calls routed to MCP servers (`mcp__` name prefix or MCP attribution fields) |
+| subagents | Rollup of the session's subagent transcripts (`<session>/subagents/`, recursively): transcript count, tokens, tool calls, files, lines written, test runs, errors. Kept apart from the headline numbers so the main transcript stays comparable across sessions |
 | skipped | Non-metric event lines, counted by type; unknown types and malformed lines are counted too, never a crash |
 
 The report header states the Claude Code version range observed in the data, because the transcript schema drifts across versions.
@@ -57,7 +58,8 @@ The report header states the Claude Code version range observed in the data, bec
 
 These numbers are **proxies, not quality judgments**. A high churn count can be healthy iteration; a perfect-looking session can ship the wrong feature.
 
-- **Token counts are floor estimates.** Some lines carry no usage; subagent transcripts (`<session>/subagents/`) are not parsed in v0, so work done by subagents is invisible except as `Agent` tool calls and sidechain events in the parent.
+- **Token counts are floor estimates.** Some lines carry no usage. Subagent work is parsed and reported in the per-session `subagents` rollup, but it is not folded into the headline token numbers — add the two if you want total cost.
+- **Test run outcomes are exit statuses, not test counts.** A "failed" run means the command exited non-zero; walkaround does not parse runner output, so it cannot tell 1 failing test from 100.
 - **Duration is the wall-clock span** between the first and last timestamped event. A session resumed across days reports as days, not active time.
 - **Path heuristics are imperfect.** `src/contest.ts` is source, but a test helper outside the known test patterns counts as source too. Reads performed through shell commands (`grep` inside Bash) don't count as reads.
 - **Lines written counts payloads, not net diff.** A 100-line Write over a 99-line file counts 100 lines, and nothing is subtracted when the agent deletes code.

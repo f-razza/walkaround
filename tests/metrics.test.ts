@@ -65,7 +65,7 @@ describe("happy fixture", () => {
   });
 
   it("detects test runs and sees no errors", () => {
-    expect(m.testRuns).toBe(1);
+    expect(m.testRuns).toEqual({ total: 1, failed: 0 });
     expect(m.errors).toEqual({ toolErrors: 0, apiErrors: 0 });
     expect(m.retryChains).toEqual([]);
     expect(m.sidechain).toEqual({ events: 0, share: 0 });
@@ -105,8 +105,8 @@ describe("errors fixture", () => {
     ]);
   });
 
-  it("counts the failed npm test as a test run", () => {
-    expect(m.testRuns).toBe(1);
+  it("counts the failed npm test as a test run and records the failure", () => {
+    expect(m.testRuns).toEqual({ total: 1, failed: 1 });
   });
 
   it("excludes the <synthetic> model and zero-usage API error from totals", () => {
@@ -137,7 +137,7 @@ describe("sidechain-mcp fixture", () => {
   });
 
   it("does not mistake echo for a test run", () => {
-    expect(m.testRuns).toBe(0);
+    expect(m.testRuns).toEqual({ total: 0, failed: 0 });
   });
 
   it("does not count the sidechain user prompt as human", () => {
@@ -210,7 +210,7 @@ describe("aggregateMetrics", () => {
     ]);
     expect(agg.uniqueFilesTouched).toBe(5);
     expect(agg.linesWritten).toEqual({ source: 5, test: 5 });
-    expect(agg.testRuns).toBe(2);
+    expect(agg.testRuns).toEqual({ total: 2, failed: 1 });
     expect(agg.errors).toEqual({ toolErrors: 3, apiErrors: 1 });
     expect(agg.retryChains).toBe(1);
     expect(agg.mcpCalls).toBe(2);
@@ -228,6 +228,55 @@ describe("aggregateMetrics", () => {
     expect(empty.tokens).toEqual({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 });
     expect(empty.versionRange).toBeUndefined();
     expect(empty.topChurn).toEqual([]);
+  });
+});
+
+describe("subagent rollup", () => {
+  // The subagent fixture, hand-computed: tokens 20/30/200/0, one Read and
+  // one Write (2 source lines), two files touched, no errors.
+  const sub = () => metricsFor("subagent.jsonl");
+
+  it("rolls subagent transcripts into one summary, dropping prompts", () => {
+    const main = computeSessionMetrics(
+      parseSession(readFileSync(new URL("./fixtures/happy.jsonl", import.meta.url), "utf8")),
+      "/fake/happy.jsonl",
+      [sub(), sub()],
+    );
+    expect(main.subagents).toEqual({
+      transcripts: 2,
+      tokens: { input: 40, output: 60, cacheRead: 400, cacheCreation: 0 },
+      toolCounts: { Read: 2, Write: 2 },
+      totalToolCalls: 4,
+      reads: 2,
+      writes: 2,
+      uniqueFilesTouched: 2,
+      linesWritten: { source: 4, test: 0 },
+      testRuns: { total: 0, failed: 0 },
+      errors: { toolErrors: 0, apiErrors: 0 },
+      retryChains: 0,
+      models: ["claude-test-mini"],
+    });
+    // Headline numbers stay main-transcript-only.
+    expect(main.tokens).toEqual({ input: 590, output: 710, cacheRead: 7400, cacheCreation: 350 });
+    expect(main.humanPrompts).toBe(2);
+  });
+
+  it("defaults to an empty rollup when no subagent transcripts exist", () => {
+    const m = metricsFor("happy.jsonl");
+    expect(m.subagents.transcripts).toBe(0);
+    expect(m.subagents.totalToolCalls).toBe(0);
+  });
+
+  it("merges rollups across sessions in the aggregate", () => {
+    const withSubs = computeSessionMetrics(
+      parseSession(readFileSync(new URL("./fixtures/happy.jsonl", import.meta.url), "utf8")),
+      "/fake/happy.jsonl",
+      [sub()],
+    );
+    const agg = aggregateMetrics([withSubs, metricsFor("errors.jsonl")]);
+    expect(agg.subagents.transcripts).toBe(1);
+    expect(agg.subagents.tokens).toEqual({ input: 20, output: 30, cacheRead: 200, cacheCreation: 0 });
+    expect(agg.subagents.toolCounts).toEqual({ Read: 1, Write: 1 });
   });
 });
 

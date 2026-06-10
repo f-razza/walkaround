@@ -1,4 +1,9 @@
-import type { AggregateMetrics, SessionMetrics } from "./metrics.js";
+import type {
+  AggregateMetrics,
+  SessionMetrics,
+  SubagentRollup,
+  TestRunStats,
+} from "./metrics.js";
 
 export interface RepoReport {
   /** Repo path the sessions were matched against, or "(unknown)". */
@@ -59,6 +64,22 @@ function churnLine(entries: Array<{ filePath: string; edits: number }>, repo: st
     .join(", ");
 }
 
+function testRunsLine(t: TestRunStats): string {
+  if (t.total === 0) return "0";
+  return t.failed > 0 ? `${t.total} (${t.failed} failed)` : `${t.total}, none failed`;
+}
+
+function subagentsLine(sub: SubagentRollup): string {
+  if (sub.transcripts === 0) return "none";
+  return [
+    plural(sub.transcripts, "transcript"),
+    `in ${formatInt(sub.tokens.input)}`,
+    `out ${formatInt(sub.tokens.output)}`,
+    plural(sub.totalToolCalls, "call"),
+    plural(sub.errors.toolErrors + sub.errors.apiErrors, "error"),
+  ].join(" | ");
+}
+
 function skippedSummary(s: SessionMetrics): string {
   const known = Object.values(s.parse.skippedKnown).reduce((a, b) => a + b, 0);
   const unknownEntries = Object.entries(s.parse.skippedUnknown);
@@ -88,11 +109,12 @@ function sessionBlock(s: SessionMetrics, repo: string): string {
     `  files touched  ${s.filesTouched.length}`,
     `  top churn      ${churnLine(s.churn, repo, 3)}`,
     `  lines written  ${formatInt(s.linesWritten.source)} source / ${formatInt(s.linesWritten.test)} test`,
-    `  test runs      ${s.testRuns}`,
+    `  test runs      ${testRunsLine(s.testRuns)}`,
     `  errors         ${s.errors.toolErrors} tool, ${s.errors.apiErrors} api | retry chains: ${s.retryChains.length}`,
     `  sidechain      ${formatShare(s.sidechain.share)} of events | mcp: ${plural(s.mcp.calls, "call")}${
       s.mcp.servers.length > 0 ? ` (${s.mcp.servers.join(", ")})` : ""
     }`,
+    `  subagents      ${subagentsLine(s.subagents)}`,
     `  skipped        ${skippedSummary(s)}`,
   ];
   return lines.join("\n");
@@ -167,11 +189,12 @@ export function renderText(report: RepoReport): string {
   out.push(
     `  lines written  ${formatInt(agg.linesWritten.source)} source / ${formatInt(agg.linesWritten.test)} test (${ratio})`,
   );
-  out.push(`  test runs      ${agg.testRuns}`);
+  out.push(`  test runs      ${testRunsLine(agg.testRuns)}`);
   out.push(
     `  errors         ${agg.errors.toolErrors} tool, ${agg.errors.apiErrors} api | retry chains: ${agg.retryChains}`,
   );
   out.push(`  mcp calls      ${agg.mcpCalls} | sidechain events: ${agg.sidechainEvents}`);
+  out.push(`  subagents      ${subagentsLine(agg.subagents)}`);
   out.push(`  top churn      ${churnLine(agg.topChurn, repo, 10)}`);
   out.push("");
   out.push(sessionsTable(agg.sessions));

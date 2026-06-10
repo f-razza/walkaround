@@ -90,6 +90,32 @@ export async function inspectSessionFile(filePath: string): Promise<SessionFileI
   return { filePath, sessionId, cwds };
 }
 
+/**
+ * Subagent transcripts attached to a session: every *.jsonl under
+ * <session-dir>/<session-name>/subagents/, recursively. Two layouts exist
+ * in the wild: flat agent-*.jsonl and workflows/<id>/agent-*.jsonl.
+ */
+export async function listSubagentFiles(sessionFilePath: string): Promise<string[]> {
+  const base = sessionFilePath.replace(/\.jsonl$/, "");
+  const root = join(base, "subagents");
+  const found: string[] = [];
+  async function walk(dir: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (entry.isFile() && entry.name.endsWith(".jsonl")) found.push(full);
+    }
+  }
+  await walk(root);
+  return found.sort();
+}
+
 /** All sessions whose observed cwd matches the given repo path. */
 export async function discoverForRepo(
   repoPath: string,

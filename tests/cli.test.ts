@@ -38,6 +38,10 @@ function buildProjects(): string {
   for (const name of ["happy.jsonl", "quirks.jsonl", "errors.jsonl", "sidechain-mcp.jsonl"]) {
     copyFileSync(fixturePath(name), join(dir, name));
   }
+  // The happy session gets one subagent transcript.
+  const subDir = join(dir, "happy", "subagents");
+  mkdirSync(subDir, { recursive: true });
+  copyFileSync(fixturePath("subagent.jsonl"), join(subDir, "agent-1.jsonl"));
   return join(root, "projects");
 }
 
@@ -81,6 +85,20 @@ describe("main", () => {
     const json = JSON.parse(r.stdout) as Record<string, unknown>;
     expect(json.repo).toBe("/home/dev/acme-rocket");
     expect((json.sessions as unknown[]).length).toBe(4);
+  });
+
+  it("attaches subagent transcripts to their session", async () => {
+    const r = await run(["/home/dev/acme-rocket", "--json"]);
+    const json = JSON.parse(r.stdout) as {
+      sessions: Array<{ shortId: string; subagents: { transcripts: number; tokens: { output: number } } }>;
+      aggregate: { subagents: { transcripts: number } };
+    };
+    const happy = json.sessions.find((s) => s.shortId === "aaaaaaaa");
+    expect(happy?.subagents.transcripts).toBe(1);
+    expect(happy?.subagents.tokens.output).toBe(30);
+    expect(json.aggregate.subagents.transcripts).toBe(1);
+    const text = await run(["/home/dev/acme-rocket"]);
+    expect(text.stdout).toContain("subagents      1 transcript | in 20 | out 30 | 2 calls | 0 errors");
   });
 
   it("prints a friendly message and exits 0 when nothing is found", async () => {
