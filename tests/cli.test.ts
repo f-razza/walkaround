@@ -103,6 +103,16 @@ describe("main", () => {
     expect(r.stdout).toContain("sessions: 4");
   });
 
+  it("emits a JSON array with --all --json", async () => {
+    const r = await run(["--all", "--json"]);
+    expect(r.code).toBe(0);
+    const reports = JSON.parse(r.stdout) as Array<Record<string, unknown>>;
+    expect(Array.isArray(reports)).toBe(true);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.repo).toBe("/home/dev/acme-rocket");
+    expect((reports[0]?.sessions as unknown[]).length).toBe(4);
+  });
+
   it("handles --all over an empty projects dir", async () => {
     const empty = mkdtempSync(join(tmpdir(), "walkaround-empty-"));
     try {

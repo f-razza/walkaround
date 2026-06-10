@@ -162,11 +162,13 @@ export function parseLine(line: string): LineOutcome {
 /** Parse a whole transcript. Blank lines are ignored; nothing ever throws. */
 export function parseSession(text: string): ParsedSession {
   const events: SessionEvent[] = [];
+  // Null-prototype buckets: type names come straight from the transcript,
+  // and keys like "constructor" or "__proto__" must behave as plain counters.
   const stats: ParseStats = {
     totalLines: 0,
     malformedLines: 0,
-    skippedKnown: {},
-    skippedUnknown: {},
+    skippedKnown: Object.create(null) as Record<string, number>,
+    skippedUnknown: Object.create(null) as Record<string, number>,
   };
   for (const line of text.split(/\r?\n/)) {
     if (line.trim() === "") continue;

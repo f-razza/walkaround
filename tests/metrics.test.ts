@@ -119,17 +119,19 @@ describe("sidechain-mcp fixture", () => {
   const m = metricsFor("sidechain-mcp.jsonl");
 
   it("measures the sidechain share over flagged events", () => {
-    // 2 sidechain events out of 10 flagged.
-    expect(m.sidechain).toEqual({ events: 2, share: 0.2 });
+    // 3 sidechain events (one prompt, one assistant, one result) out of 13 flagged.
+    expect(m.sidechain).toEqual({ events: 3, share: 3 / 13 });
   });
 
-  it("measures MCP calls by prefix and attribution", () => {
-    // 1 MCP call out of 4 tool calls.
-    expect(m.mcp).toEqual({ calls: 1, share: 0.25, servers: ["rocketdb"] });
+  it("measures MCP calls by name prefix AND by attribution fields", () => {
+    // mcp__rocketdb__query by prefix, plus a plain Bash call on a line
+    // carrying attributionMcpServer "telemetry": 2 MCP calls out of 5.
+    expect(m.mcp).toEqual({ calls: 2, share: 0.4, servers: ["rocketdb", "telemetry"] });
   });
 
   it("keeps sidechain tool calls in the histogram", () => {
-    expect(m.toolCounts).toEqual({ Agent: 1, Read: 1, mcp__rocketdb__query: 1, Bash: 1 });
+    expect(m.toolCounts).toEqual({ Agent: 1, Read: 1, mcp__rocketdb__query: 1, Bash: 2 });
+    expect(m.totalToolCalls).toBe(5);
     expect(m.reads).toBe(1);
     expect(m.writes).toBe(0);
   });
@@ -138,10 +140,13 @@ describe("sidechain-mcp fixture", () => {
     expect(m.testRuns).toBe(0);
   });
 
-  it("sums tokens across main and sidechain lines", () => {
-    expect(m.tokens).toEqual({ input: 50, output: 50, cacheRead: 50, cacheCreation: 50 });
-    expect(m.branches).toEqual(["feature/mcp"]);
+  it("does not count the sidechain user prompt as human", () => {
     expect(m.humanPrompts).toBe(1);
+  });
+
+  it("sums tokens across main and sidechain lines", () => {
+    expect(m.tokens).toEqual({ input: 55, output: 55, cacheRead: 55, cacheCreation: 55 });
+    expect(m.branches).toEqual(["feature/mcp"]);
   });
 });
 
@@ -180,10 +185,10 @@ describe("aggregateMetrics", () => {
 
   it("sums token totals", () => {
     expect(agg.tokens).toEqual({
-      input: 590 + 40 + 50 + 10,
-      output: 710 + 20 + 50 + 20,
-      cacheRead: 7400 + 0 + 50 + 30,
-      cacheCreation: 350 + 0 + 50 + 40,
+      input: 590 + 40 + 55 + 10,
+      output: 710 + 20 + 55 + 20,
+      cacheRead: 7400 + 0 + 55 + 30,
+      cacheCreation: 350 + 0 + 55 + 40,
     });
   });
 
@@ -193,11 +198,11 @@ describe("aggregateMetrics", () => {
       Read: 2,
       Edit: 5,
       Write: 1,
-      Bash: 3,
+      Bash: 4,
       Agent: 1,
       mcp__rocketdb__query: 1,
     });
-    expect(agg.totalToolCalls).toBe(13);
+    expect(agg.totalToolCalls).toBe(14);
     expect(agg.topChurn).toEqual([
       { filePath: "/home/dev/acme-rocket/src/core.ts", edits: 3 },
       { filePath: "/home/dev/acme-rocket/src/thruster.ts", edits: 2 },
@@ -208,8 +213,8 @@ describe("aggregateMetrics", () => {
     expect(agg.testRuns).toBe(2);
     expect(agg.errors).toEqual({ toolErrors: 3, apiErrors: 1 });
     expect(agg.retryChains).toBe(1);
-    expect(agg.mcpCalls).toBe(1);
-    expect(agg.sidechainEvents).toBe(2);
+    expect(agg.mcpCalls).toBe(2);
+    expect(agg.sidechainEvents).toBe(3);
     expect(agg.humanPrompts).toBe(5);
   });
 
@@ -223,6 +228,52 @@ describe("aggregateMetrics", () => {
     expect(empty.tokens).toEqual({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 });
     expect(empty.versionRange).toBeUndefined();
     expect(empty.topChurn).toEqual([]);
+  });
+});
+
+describe("hardening and edge cases", () => {
+  it("keeps the histogram numeric for hostile tool names", () => {
+    const hostile = [
+      '{"type":"assistant","uuid":"a1","sessionId":"s","message":{"id":"m1","model":"claude-test-1","content":[{"type":"tool_use","id":"t1","name":"constructor","input":{}}],"usage":{"input_tokens":1,"output_tokens":1}}}',
+      '{"type":"assistant","uuid":"a2","sessionId":"s","message":{"id":"m2","model":"claude-test-1","content":[{"type":"tool_use","id":"t2","name":"constructor","input":{}}],"usage":{"input_tokens":1,"output_tokens":1}}}',
+      '{"type":"assistant","uuid":"a3","sessionId":"s","message":{"id":"m3","model":"claude-test-1","content":[{"type":"tool_use","id":"t3","name":"__proto__","input":{}}],"usage":{"input_tokens":1,"output_tokens":1}}}',
+    ].join("\n");
+    const m = computeSessionMetrics(parseSession(hostile), "/fake/hostile.jsonl");
+    expect(m.toolCounts["constructor"]).toBe(2);
+    expect(m.toolCounts["__proto__"]).toBe(1);
+    expect(m.totalToolCalls).toBe(3);
+    const agg = aggregateMetrics([m, m]);
+    expect(agg.toolCounts["constructor"]).toBe(4);
+    expect(agg.toolCounts["__proto__"]).toBe(2);
+  });
+
+  it("computes sane metrics for an empty transcript", () => {
+    const m = computeSessionMetrics(parseSession(""), "/fake/empty.jsonl");
+    expect(m.sessionId).toBe("(unknown)");
+    expect(m.durationMs).toBe(0);
+    expect(m.startTime).toBeUndefined();
+    expect(m.versionRange).toBeUndefined();
+    expect(m.tokens).toEqual({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 });
+    expect(m.sidechain.share).toBe(0);
+    expect(m.mcp.share).toBe(0);
+  });
+
+  it("compares versions numerically, not lexicographically", () => {
+    const text = [
+      '{"type":"assistant","uuid":"a1","sessionId":"s","version":"2.1.9","message":{"id":"m1","content":[]}}',
+      '{"type":"assistant","uuid":"a2","sessionId":"s","version":"2.1.76","message":{"id":"m2","content":[]}}',
+    ].join("\n");
+    const m = computeSessionMetrics(parseSession(text), "/fake/v.jsonl");
+    expect(m.versionRange).toEqual({ min: "2.1.9", max: "2.1.76" });
+  });
+
+  it("dedups usage by message id when requestId is missing, last line wins", () => {
+    const text = [
+      '{"type":"assistant","uuid":"a1","sessionId":"s","message":{"id":"m1","content":[],"usage":{"input_tokens":10,"output_tokens":5}}}',
+      '{"type":"assistant","uuid":"a2","sessionId":"s","message":{"id":"m1","content":[],"usage":{"input_tokens":10,"output_tokens":90}}}',
+    ].join("\n");
+    const m = computeSessionMetrics(parseSession(text), "/fake/dedup.jsonl");
+    expect(m.tokens).toEqual({ input: 10, output: 90, cacheRead: 0, cacheCreation: 0 });
   });
 });
 
@@ -279,5 +330,17 @@ describe("retry chain edge cases", () => {
     ]);
     const m = computeSessionMetrics(parseSession(text), "/fake/x.jsonl");
     expect(m.retryChains).toEqual([{ tool: "Edit", filePath: "/p/a.ts", length: 3 }]);
+  });
+
+  it("never chains failures whose source call cannot be resolved", () => {
+    const text = lines([
+      // Results pointing at a non-existent assistant uuid: unattributable.
+      failure("u1", "missing", "t1"),
+      failure("u2", "missing", "t2"),
+      failure("u3", "missing", "t3"),
+    ]);
+    const m = computeSessionMetrics(parseSession(text), "/fake/x.jsonl");
+    expect(m.errors.toolErrors).toBe(3);
+    expect(m.retryChains).toEqual([]);
   });
 });

@@ -72,10 +72,19 @@ describe("reportToJson", () => {
     expect(aggregate.sessionCount).toBe(4);
     expect(aggregate.sessions).toBeUndefined();
     expect(aggregate.tokens).toEqual({
-      input: 690,
-      output: 800,
-      cacheRead: 7480,
-      cacheCreation: 440,
+      input: 695,
+      output: 805,
+      cacheRead: 7485,
+      cacheCreation: 445,
     });
+  });
+});
+
+describe("degenerate input", () => {
+  it("renders a session with no events without crashing", () => {
+    const empty = computeSessionMetrics(parseSession(""), "/fake/empty.jsonl");
+    const text = renderText({ repo: "/x", aggregate: aggregateMetrics([empty]) });
+    expect(text).toContain("(no timestamp)");
+    expect(text).toContain("0 human");
   });
 });

@@ -150,7 +150,9 @@ export function computeSessionMetrics(parsed: ParsedSession, filePath: string): 
   const usageByRequest = new Map<string, TokenUsage>();
   let lineIndex = 0;
 
-  const toolCounts: Record<string, number> = {};
+  // Null-prototype: tool names come straight from the transcript, and keys
+  // like "constructor" or "__proto__" must behave as plain counters.
+  const toolCounts: Record<string, number> = Object.create(null) as Record<string, number>;
   let totalToolCalls = 0;
   let reads = 0;
   let writes = 0;
@@ -296,16 +298,18 @@ export function computeSessionMetrics(parsed: ParsedSession, filePath: string): 
 
   // A retry chain is a maximal run of >= 2 consecutive failed results for
   // the same tool and file; any success or change of target breaks the run.
+  // Failures whose source call cannot be resolved never form chains: two
+  // unattributable failures are not evidence of retrying the same thing.
   const retryChains: RetryChain[] = [];
-  let run: { tool?: string; filePath?: string; length: number } | undefined;
+  let run: { tool: string; filePath?: string; length: number } | undefined;
   const closeRun = () => {
     if (run !== undefined && run.length >= 2) {
-      retryChains.push({ tool: run.tool ?? "(unknown)", filePath: run.filePath, length: run.length });
+      retryChains.push({ tool: run.tool, filePath: run.filePath, length: run.length });
     }
     run = undefined;
   };
   for (const result of orderedResults) {
-    if (!result.isError) {
+    if (!result.isError || result.tool === undefined) {
       closeRun();
     } else if (run !== undefined && run.tool === result.tool && run.filePath === result.filePath) {
       run.length++;
@@ -364,7 +368,7 @@ export function aggregateMetrics(sessions: SessionMetrics[]): AggregateMetrics {
   });
 
   const tokens: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
-  const toolCounts: Record<string, number> = {};
+  const toolCounts: Record<string, number> = Object.create(null) as Record<string, number>;
   const churnCounts = new Map<string, number>();
   const touched = new Set<string>();
   const versions: string[] = [];
