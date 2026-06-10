@@ -30,7 +30,15 @@ export {
   type SubagentRollup,
   type TestRunStats,
 } from "./metrics.js";
-export { renderText, reportToJson, type RepoReport } from "./report.js";
+export {
+  renderText,
+  renderTrend,
+  reportToJson,
+  trendRows,
+  trendToJson,
+  type RepoReport,
+  type TrendRow,
+} from "./report.js";
 export type {
   AssistantEvent,
   ParsedSession,

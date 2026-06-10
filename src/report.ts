@@ -212,3 +212,112 @@ export function reportToJson(report: RepoReport): unknown {
     aggregate,
   };
 }
+
+/** One session reduced to derived indicators, for cross-session comparison. */
+export interface TrendRow {
+  date: string;
+  shortId: string;
+  durationMs: number;
+  prompts: number;
+  tokensOut: number;
+  /** Output tokens bought by one human prompt; null when no prompts. */
+  outPerPrompt: number | null;
+  /** Failed calls per 100 tool calls; null when no calls. */
+  errPer100Calls: number | null;
+  testRuns: TestRunStats;
+  reads: number;
+  writes: number;
+  subagentTranscripts: number;
+  /** Most-edited file as "basename xN", or null when nothing was written. */
+  topChurn: string | null;
+}
+
+export function trendRows(agg: AggregateMetrics): TrendRow[] {
+  return agg.sessions.map((s) => {
+    const errors = s.errors.toolErrors + s.errors.apiErrors;
+    const top = s.churn[0];
+    return {
+      date: s.startTime !== undefined ? s.startTime.slice(0, 10) : "(unknown)",
+      shortId: s.shortId,
+      durationMs: s.durationMs,
+      prompts: s.humanPrompts,
+      tokensOut: s.tokens.output,
+      outPerPrompt: s.humanPrompts > 0 ? Math.round(s.tokens.output / s.humanPrompts) : null,
+      errPer100Calls:
+        s.totalToolCalls > 0 ? Math.round((1000 * errors) / s.totalToolCalls) / 10 : null,
+      testRuns: s.testRuns,
+      reads: s.reads,
+      writes: s.writes,
+      subagentTranscripts: s.subagents.transcripts,
+      topChurn: top !== undefined ? `${top.filePath.split("/").pop()} x${top.edits}` : null,
+    };
+  });
+}
+
+export function renderTrend(report: RepoReport): string {
+  const { repo, aggregate: agg } = report;
+  const row = (cells: [string, string, string, string, string, string, string, string, string, string]) =>
+    [
+      "  ",
+      cells[0].padEnd(12),
+      cells[1].padEnd(10),
+      cells[2].padStart(12),
+      cells[3].padStart(9),
+      cells[4].padStart(12),
+      cells[5].padStart(9),
+      cells[6].padStart(8),
+      cells[7].padStart(7),
+      cells[8].padStart(7),
+      "  " + cells[9],
+    ].join("");
+
+  const out: string[] = [];
+  out.push("walkaround | trend");
+  out.push(`repo: ${repo}`);
+  out.push(
+    `sessions: ${agg.sessionCount}` +
+      (agg.versionRange !== undefined
+        ? ` | Claude Code versions observed: ${
+            agg.versionRange.min === agg.versionRange.max
+              ? agg.versionRange.min
+              : `${agg.versionRange.min} - ${agg.versionRange.max}`
+          }`
+        : " | Claude Code version: not recorded"),
+  );
+  out.push("");
+  out.push(
+    row(["date", "id", "duration", "prompts", "out/prompt", "err/100", "tests", "r/w", "subag", "top churn"]),
+  );
+  for (const r of trendRows(agg)) {
+    out.push(
+      row([
+        r.date,
+        r.shortId,
+        formatDuration(r.durationMs),
+        String(r.prompts),
+        r.outPerPrompt !== null ? formatInt(r.outPerPrompt) : "-",
+        r.errPer100Calls !== null ? r.errPer100Calls.toFixed(1) : "-",
+        `${r.testRuns.total}${r.testRuns.failed > 0 ? `(${r.testRuns.failed}F)` : ""}`,
+        `${r.reads}/${r.writes}`,
+        String(r.subagentTranscripts),
+        r.topChurn ?? "-",
+      ]),
+    );
+  }
+  out.push("");
+  out.push(
+    "  out/prompt: output tokens bought by one human prompt | err/100: failed calls per 100 tool calls",
+  );
+  out.push("  tests: runs (F = failed runs) | r/w: read vs write calls | subag: subagent transcripts");
+  out.push("");
+  return out.join("\n");
+}
+
+/** Same data as the trend table, as a stable JSON-serializable object. */
+export function trendToJson(report: RepoReport): unknown {
+  return {
+    repo: report.repo,
+    claudeCodeVersions: report.aggregate.versionRange ?? null,
+    rows: trendRows(report.aggregate),
+  };
+}

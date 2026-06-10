@@ -118,3 +118,19 @@ aggregate | 4 sessions | total agent time 10 min
   2025-03-13  dddddddd         3 min        1          55           5       0
 "
 `;
+
+exports[`renderTrend > renders the trend table 1`] = `
+"walkaround | trend
+repo: /home/dev/acme-rocket
+sessions: 4 | Claude Code versions observed: 2.0.0 - 2.0.5
+
+  date        id            duration  prompts  out/prompt  err/100   tests    r/w  subag  top churn
+  2025-03-10  aaaaaaaa         6 min        2         355      0.0       1    1/3      0  thruster.ts x2
+  2025-03-11  bbbbbbbb           5 s        1          20        -       0    0/0      0  -
+  2025-03-12  cccccccc          50 s        1          20    100.0   1(1F)    0/3      0  core.ts x3
+  2025-03-13  dddddddd         3 min        1          55      0.0       0    1/0      0  -
+
+  out/prompt: output tokens bought by one human prompt | err/100: failed calls per 100 tool calls
+  tests: runs (F = failed runs) | r/w: read vs write calls | subag: subagent transcripts
+"
+`;

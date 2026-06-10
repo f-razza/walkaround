@@ -6,15 +6,22 @@ import { main, parseArgs } from "../src/cli.js";
 
 describe("parseArgs", () => {
   it("parses the documented contract", () => {
-    expect(parseArgs([])).toEqual({ all: false, json: false, help: false });
+    expect(parseArgs([])).toEqual({ all: false, json: false, trend: false, help: false });
     expect(parseArgs(["/some/repo"])).toEqual({
       path: "/some/repo",
       all: false,
       json: false,
+      trend: false,
       help: false,
     });
-    expect(parseArgs(["--all", "--json"])).toEqual({ all: true, json: true, help: false });
-    expect(parseArgs(["-h"])).toEqual({ all: false, json: false, help: true });
+    expect(parseArgs(["--all", "--json"])).toEqual({
+      all: true,
+      json: true,
+      trend: false,
+      help: false,
+    });
+    expect(parseArgs(["--trend"])).toEqual({ all: false, json: false, trend: true, help: false });
+    expect(parseArgs(["-h"])).toEqual({ all: false, json: false, trend: false, help: true });
   });
 
   it("rejects unknown options, extra args and path+--all", () => {
@@ -140,6 +147,28 @@ describe("main", () => {
     } finally {
       rmSync(empty, { recursive: true, force: true });
     }
+  });
+
+  it("renders the trend table with --trend", async () => {
+    const r = await run(["--trend", "/home/dev/acme-rocket"]);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain("walkaround | trend");
+    expect(r.stdout).toContain("out/prompt");
+    // happy session: 710 output tokens over 2 prompts.
+    expect(r.stdout).toContain("355");
+    // errors session: 4 failed-ish calls out of 4, one failed test run.
+    expect(r.stdout).toContain("100.0");
+    expect(r.stdout).toContain("1(1F)");
+  });
+
+  it("emits trend rows with --trend --json", async () => {
+    const r = await run(["--trend", "--json", "/home/dev/acme-rocket"]);
+    const json = JSON.parse(r.stdout) as {
+      rows: Array<{ shortId: string; outPerPrompt: number | null; errPer100Calls: number | null }>;
+    };
+    expect(json.rows).toHaveLength(4);
+    expect(json.rows[0]).toMatchObject({ shortId: "aaaaaaaa", outPerPrompt: 355 });
+    expect(json.rows.find((x) => x.shortId === "cccccccc")?.errPer100Calls).toBe(100);
   });
 
   it("fails on unknown options with usage on stderr", async () => {

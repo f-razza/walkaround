@@ -12,13 +12,14 @@ import {
 } from "./discover.js";
 import { aggregateMetrics, computeSessionMetrics, type SessionMetrics } from "./metrics.js";
 import { parseSession } from "./parser.js";
-import { renderText, reportToJson, type RepoReport } from "./report.js";
+import { renderText, renderTrend, reportToJson, trendToJson, type RepoReport } from "./report.js";
 
 const USAGE = `walkaround - post-flight inspection for AI coding sessions
 
 Usage:
   walkaround [path]      report for the repo at path (default: current dir)
   walkaround --all       report for every project found
+  walkaround --trend     per-session table of derived indicators
   walkaround --json      same data, machine-readable
 
 Reads Claude Code transcripts from ~/.claude/projects. Local-only,
@@ -28,14 +29,16 @@ interface CliArgs {
   path?: string;
   all: boolean;
   json: boolean;
+  trend: boolean;
   help: boolean;
 }
 
 export function parseArgs(argv: string[]): CliArgs | { error: string } {
-  const args: CliArgs = { all: false, json: false, help: false };
+  const args: CliArgs = { all: false, json: false, trend: false, help: false };
   for (const arg of argv) {
     if (arg === "--all") args.all = true;
     else if (arg === "--json") args.json = true;
+    else if (arg === "--trend") args.trend = true;
     else if (arg === "--help" || arg === "-h") args.help = true;
     else if (arg.startsWith("-")) return { error: `Unknown option: ${arg}` };
     else if (args.path !== undefined) return { error: `Unexpected extra argument: ${arg}` };
@@ -101,6 +104,9 @@ export async function main(argv: string[], io?: Partial<CliIo>): Promise<number>
     return 0;
   }
 
+  const render = parsed.trend ? renderTrend : renderText;
+  const toJson = parsed.trend ? trendToJson : reportToJson;
+
   if (parsed.all) {
     const groups = await discoverAll(projectsDir);
     const keys = [...groups.keys()].sort((a, b) =>
@@ -111,11 +117,11 @@ export async function main(argv: string[], io?: Partial<CliIo>): Promise<number>
       reports.push(await buildReport(key, groups.get(key) ?? []));
     }
     if (parsed.json) {
-      out(JSON.stringify(reports.map(reportToJson), null, 2) + "\n");
+      out(JSON.stringify(reports.map(toJson), null, 2) + "\n");
     } else if (reports.length === 0) {
       out("No Claude Code sessions found under " + projectsDir + ".\n");
     } else {
-      out(reports.map(renderText).join("\n" + "=".repeat(72) + "\n\n"));
+      out(reports.map(render).join("\n" + "=".repeat(72) + "\n\n"));
     }
     return 0;
   }
@@ -132,7 +138,7 @@ export async function main(argv: string[], io?: Partial<CliIo>): Promise<number>
     return 0;
   }
   const report = await buildReport(repo, files);
-  out(parsed.json ? JSON.stringify(reportToJson(report), null, 2) + "\n" : renderText(report));
+  out(parsed.json ? JSON.stringify(toJson(report), null, 2) + "\n" : render(report));
   return 0;
 }
 

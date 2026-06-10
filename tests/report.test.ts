@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { aggregateMetrics, computeSessionMetrics } from "../src/metrics.js";
 import { parseSession } from "../src/parser.js";
-import { renderText, reportToJson, type RepoReport } from "../src/report.js";
+import { renderText, renderTrend, reportToJson, trendRows, type RepoReport } from "../src/report.js";
 
 const metricsFor = (name: string) =>
   computeSessionMetrics(
@@ -76,6 +76,26 @@ describe("reportToJson", () => {
       output: 805,
       cacheRead: 7485,
       cacheCreation: 445,
+    });
+  });
+});
+
+describe("renderTrend", () => {
+  it("renders the trend table", () => {
+    expect(renderTrend(fullReport())).toMatchSnapshot();
+  });
+
+  it("derives indicators per session", () => {
+    const rows = trendRows(fullReport().aggregate);
+    expect(rows.map((r) => r.shortId)).toEqual(["aaaaaaaa", "bbbbbbbb", "cccccccc", "dddddddd"]);
+    // happy: 710 out tokens over 2 prompts; 0 errors on 5 calls.
+    expect(rows[0]).toMatchObject({ outPerPrompt: 355, errPer100Calls: 0 });
+    // quirks: no tool calls at all.
+    expect(rows[1]?.errPer100Calls).toBeNull();
+    // errors: 4 errors on 4 calls, one failed test run.
+    expect(rows[2]).toMatchObject({
+      errPer100Calls: 100,
+      testRuns: { total: 1, failed: 1 },
     });
   });
 });

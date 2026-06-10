@@ -26,8 +26,11 @@ Requires Node >= 20.
 walkaround            # report for the repo you are in
 walkaround ~/dev/app  # report for another repo
 walkaround --all      # every project Claude Code has touched
+walkaround --trend    # per-session table of derived indicators
 walkaround --json     # same data, machine-readable
 ```
+
+`--trend` reduces each session to comparable indicators — output tokens bought per human prompt, failed calls per 100 tool calls, test runs (and failures), read/write calls, subagent transcripts, top-churn file — so you can watch how your sessions evolve over time. It combines with `--all` and `--json`.
 
 Sessions are matched to a repo by the `cwd` recorded *inside* each transcript, not by folder name — folder names under `~/.claude/projects` are lossy encodings and lie about paths containing dashes.
 
