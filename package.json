@@ -11,7 +11,15 @@
     "cli"
   ],
   "license": "MIT",
-  "author": "Federico (DevByFede)",
+  "author": "Federico Razza (@DevCalledFede)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DevCalledFede/walkaround.git"
+  },
+  "homepage": "https://github.com/DevCalledFede/walkaround#readme",
+  "bugs": {
+    "url": "https://github.com/DevCalledFede/walkaround/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=20"

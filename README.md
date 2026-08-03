@@ -1,5 +1,8 @@
 # walkaround
 
+[![npm](https://img.shields.io/npm/v/walkaround?style=flat-square)](https://www.npmjs.com/package/walkaround)
+[![license](https://img.shields.io/npm/l/walkaround?style=flat-square)](./LICENSE)
+
 > Your AI agent just flew through your codebase. Do the walkaround.
 
 `walkaround` is the post-flight inspection for AI coding sessions. It parses Claude Code's local session transcripts (the JSONL files under `~/.claude/projects/`) and produces a per-session and aggregate report of what the agent actually did: tokens, tool usage, files touched, churn, source-vs-test lines written, errors and retry chains.
@@ -9,6 +12,22 @@ Local-only. Read-only. Zero network. Zero runtime dependencies.
 ## Status
 
 **v0 — work in progress.** The report format is not stable yet.
+
+The parser was written against Claude Code 2.1.76–2.1.170 and is re-checked against
+newer releases: the most recent run covered 14,311 transcript lines up to 2.1.219
+with 0 malformed lines and 0 unknown event types. Unknown shapes are counted and
+skipped, never fatal — see [Honest limits](#honest-limits).
+
+## Why
+
+Because the session summary is not evidence.
+
+The blind spot this was built to expose is subagents. On one real session,
+the main transcript reported 111,662 output tokens; its 174 subagent transcripts
+had produced 2,020,423 — 18x more work than the headline number showed.
+Across 40 sessions: 113 errors in the headline numbers, 463 more inside the
+subagent rollup. Most of what the agent does, and most of what goes wrong,
+happens where the summary does not look.
 
 ## Install
 
@@ -67,7 +86,7 @@ These numbers are **proxies, not quality judgments**. A high churn count can be 
 - **Path heuristics are imperfect.** `src/contest.ts` is source, but a test helper outside the known test patterns counts as source too. Reads performed through shell commands (`grep` inside Bash) don't count as reads.
 - **Lines written counts payloads, not net diff.** A 100-line Write over a 99-line file counts 100 lines, and nothing is subtracted when the agent deletes code.
 - **Prompt counting is heuristic.** Queued messages, slash-command wrappers and pasted command output are filtered by shape, not by ground truth.
-- **Schema knowledge is empirical.** The format was observed on Claude Code versions 2.1.76 - 2.1.170 (notably: one API response spans multiple JSONL lines repeating `message.id` and `usage`, so naive summing would overcount tokens up to ~50x). Other versions are parsed defensively: unknown event types are counted and skipped.
+- **Schema knowledge is empirical.** The format was observed on Claude Code versions 2.1.76 - 2.1.170 and re-verified up to 2.1.219 (notably: one API response spans multiple JSONL lines repeating `message.id` and `usage`, so naive summing would overcount tokens up to ~50x). The format is internal to Claude Code and can change on any release; other versions are parsed defensively, and unknown event types are counted and skipped rather than crashing. The report header always states the version range actually observed in your data.
 - **Claude Code only** for now. No other agent formats.
 
 ## Development
