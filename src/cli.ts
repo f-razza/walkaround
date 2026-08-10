@@ -12,15 +12,23 @@ import {
 } from "./discover.js";
 import { aggregateMetrics, computeSessionMetrics, type SessionMetrics } from "./metrics.js";
 import { parseSession } from "./parser.js";
-import { renderText, renderTrend, reportToJson, trendToJson, type RepoReport } from "./report.js";
+import {
+  renderText,
+  renderTrend,
+  reportToJson,
+  trendToJson,
+  type RepoReport,
+  type SubagentDetail,
+} from "./report.js";
 
 const USAGE = `walkaround - post-flight inspection for AI coding sessions
 
 Usage:
-  walkaround [path]      report for the repo at path (default: current dir)
-  walkaround --all       report for every project found
-  walkaround --trend     per-session table of derived indicators
-  walkaround --json      same data, machine-readable
+  walkaround [path]        report for the repo at path (default: current dir)
+  walkaround --all         report for every project found
+  walkaround --trend       per-session table of derived indicators
+  walkaround --subagents   one row per subagent transcript, costliest first
+  walkaround --json        same data, machine-readable
 
 Reads Claude Code transcripts from ~/.claude/projects. Local-only,
 read-only, zero network.`;
@@ -30,15 +38,17 @@ interface CliArgs {
   all: boolean;
   json: boolean;
   trend: boolean;
+  subagents: boolean;
   help: boolean;
 }
 
 export function parseArgs(argv: string[]): CliArgs | { error: string } {
-  const args: CliArgs = { all: false, json: false, trend: false, help: false };
+  const args: CliArgs = { all: false, json: false, trend: false, subagents: false, help: false };
   for (const arg of argv) {
     if (arg === "--all") args.all = true;
     else if (arg === "--json") args.json = true;
     else if (arg === "--trend") args.trend = true;
+    else if (arg === "--subagents") args.subagents = true;
     else if (arg === "--help" || arg === "-h") args.help = true;
     else if (arg.startsWith("-")) return { error: `Unknown option: ${arg}` };
     else if (args.path !== undefined) return { error: `Unexpected extra argument: ${arg}` };
@@ -46,6 +56,9 @@ export function parseArgs(argv: string[]): CliArgs | { error: string } {
   }
   if (args.all && args.path !== undefined) {
     return { error: "A path and --all cannot be combined." };
+  }
+  if (args.trend && args.subagents) {
+    return { error: "--trend and --subagents cannot be combined." };
   }
   return args;
 }
@@ -57,7 +70,12 @@ export interface CliIo {
   cwd: string;
 }
 
-async function loadSession(info: SessionFileInfo): Promise<SessionMetrics | undefined> {
+interface LoadedSession {
+  metrics: SessionMetrics;
+  subagents: SessionMetrics[];
+}
+
+async function loadSession(info: SessionFileInfo): Promise<LoadedSession | undefined> {
   let text: string;
   try {
     text = await readFile(info.filePath, "utf8");
@@ -73,16 +91,34 @@ async function loadSession(info: SessionFileInfo): Promise<SessionMetrics | unde
       // A vanished or unreadable subagent transcript never blocks the session.
     }
   }
-  return computeSessionMetrics(parseSession(text), info.filePath, subagents);
+  return { metrics: computeSessionMetrics(parseSession(text), info.filePath, subagents), subagents };
 }
 
-async function buildReport(repo: string, files: SessionFileInfo[]): Promise<RepoReport> {
+async function buildReport(
+  repo: string,
+  files: SessionFileInfo[],
+  withSubagents: boolean,
+): Promise<RepoReport> {
   const sessions: SessionMetrics[] = [];
+  const detail: SubagentDetail[] = [];
   for (const info of files) {
-    const metrics = await loadSession(info);
-    if (metrics) sessions.push(metrics);
+    const loaded = await loadSession(info);
+    if (!loaded) continue;
+    sessions.push(loaded.metrics);
+    for (const sub of loaded.subagents) {
+      detail.push({ parentShortId: loaded.metrics.shortId, metrics: sub });
+    }
   }
-  return { repo, aggregate: aggregateMetrics(sessions) };
+  const report: RepoReport = { repo, aggregate: aggregateMetrics(sessions) };
+  if (withSubagents) {
+    detail.sort(
+      (a, b) =>
+        b.metrics.tokens.output - a.metrics.tokens.output ||
+        a.metrics.filePath.localeCompare(b.metrics.filePath),
+    );
+    report.subagents = detail;
+  }
+  return report;
 }
 
 export async function main(argv: string[], io?: Partial<CliIo>): Promise<number> {
@@ -114,7 +150,7 @@ export async function main(argv: string[], io?: Partial<CliIo>): Promise<number>
     );
     const reports: RepoReport[] = [];
     for (const key of keys) {
-      reports.push(await buildReport(key, groups.get(key) ?? []));
+      reports.push(await buildReport(key, groups.get(key) ?? [], parsed.subagents));
     }
     if (parsed.json) {
       out(JSON.stringify(reports.map(toJson), null, 2) + "\n");
@@ -137,7 +173,7 @@ export async function main(argv: string[], io?: Partial<CliIo>): Promise<number>
     );
     return 0;
   }
-  const report = await buildReport(repo, files);
+  const report = await buildReport(repo, files, parsed.subagents);
   out(parsed.json ? JSON.stringify(toJson(report), null, 2) + "\n" : render(report));
   return 0;
 }

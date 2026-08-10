@@ -9,6 +9,19 @@ export interface RepoReport {
   /** Repo path the sessions were matched against, or "(unknown)". */
   repo: string;
   aggregate: AggregateMetrics;
+  /**
+   * Per-subagent metrics, sorted by output tokens descending. Present only
+   * when detail was requested (--subagents); its absence keeps the default
+   * text and JSON output unchanged.
+   */
+  subagents?: SubagentDetail[];
+}
+
+/** One subagent transcript's metrics, tied back to its parent session. */
+export interface SubagentDetail {
+  /** shortId of the session whose transcript spawned this subagent. */
+  parentShortId: string;
+  metrics: SessionMetrics;
 }
 
 function formatInt(n: number): string {
@@ -48,11 +61,12 @@ function displayPath(filePath: string, repo: string): string {
   return filePath;
 }
 
-function histogramLine(toolCounts: Record<string, number>): string {
-  const entries = Object.entries(toolCounts).sort(
+function histogramLine(toolCounts: Record<string, number>, top?: number): string {
+  let entries = Object.entries(toolCounts).sort(
     (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
   );
   if (entries.length === 0) return "none";
+  if (top !== undefined) entries = entries.slice(0, top);
   return entries.map(([name, count]) => `${name} x${count}`).join(", ");
 }
 
@@ -78,6 +92,80 @@ function subagentsLine(sub: SubagentRollup): string {
     plural(sub.totalToolCalls, "call"),
     plural(sub.errors.toolErrors + sub.errors.apiErrors, "error"),
   ].join(" | ");
+}
+
+/** Transcript file name without extension: agent-<id> for real subagents. */
+function transcriptName(filePath: string): string {
+  const base = filePath.split("/").pop() ?? filePath;
+  return base.replace(/\.jsonl$/, "");
+}
+
+/**
+ * One row per subagent transcript plus the same totals line the rollup
+ * prints today, so the detail stays reconcilable with --all. Entries are
+ * rendered in the order given (the CLI sorts by output tokens descending).
+ */
+function subagentsSection(entries: SubagentDetail[], rollup: SubagentRollup, repo: string): string {
+  if (entries.length === 0) {
+    return "subagent detail\n  no subagent transcripts under these sessions";
+  }
+  const row = (
+    cells: [string, string, string, string, string, string, string, string, string, string, string],
+  ) =>
+    [
+      "  ",
+      cells[0].padEnd(10),
+      cells[1].padEnd(24),
+      cells[2].padEnd(28),
+      cells[3].padStart(10),
+      cells[4].padStart(10),
+      cells[5].padStart(7),
+      cells[6].padStart(9),
+      cells[7].padStart(11),
+      cells[8].padStart(7),
+      cells[9].padStart(7),
+      "  " + cells[10],
+    ].join("");
+  const out: string[] = [];
+  out.push("subagent detail | one row per transcript, sorted by output tokens");
+  out.push(
+    row([
+      "parent",
+      "transcript",
+      "model",
+      "duration",
+      "tok out",
+      "calls",
+      "err t/a",
+      "lines s/t",
+      "files",
+      "retry",
+      "top tools | top churn",
+    ]),
+  );
+  for (const { parentShortId, metrics: m } of entries) {
+    const churnTop = m.churn[0];
+    out.push(
+      row([
+        parentShortId,
+        transcriptName(m.filePath),
+        m.models.length > 0 ? m.models.join(", ") : "(none)",
+        formatDuration(m.durationMs),
+        formatInt(m.tokens.output),
+        String(m.totalToolCalls),
+        `${m.errors.toolErrors}/${m.errors.apiErrors}`,
+        `${formatInt(m.linesWritten.source)}/${formatInt(m.linesWritten.test)}`,
+        String(m.filesTouched.length),
+        String(m.retryChains.length),
+        histogramLine(m.toolCounts, 3) +
+          (churnTop !== undefined
+            ? ` | ${displayPath(churnTop.filePath, repo)} x${churnTop.edits}`
+            : " | no churn"),
+      ]),
+    );
+  }
+  out.push(`  total: ${subagentsLine(rollup)}`);
+  return out.join("\n");
 }
 
 function skippedSummary(s: SessionMetrics): string {
@@ -199,18 +287,24 @@ export function renderText(report: RepoReport): string {
   out.push("");
   out.push(sessionsTable(agg.sessions));
   out.push("");
+  if (report.subagents !== undefined) {
+    out.push(subagentsSection(report.subagents, agg.subagents, repo));
+    out.push("");
+  }
   return out.join("\n");
 }
 
 /** Same data as the text report, as a stable JSON-serializable object. */
 export function reportToJson(report: RepoReport): unknown {
   const { sessions, ...aggregate } = report.aggregate;
-  return {
+  const json: Record<string, unknown> = {
     repo: report.repo,
     claudeCodeVersions: report.aggregate.versionRange ?? null,
     sessions,
     aggregate,
   };
+  if (report.subagents !== undefined) json.subagents = report.subagents;
+  return json;
 }
 
 /** One session reduced to derived indicators, for cross-session comparison. */

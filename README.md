@@ -42,14 +42,17 @@ Requires Node >= 20.
 ## Usage
 
 ```sh
-walkaround            # report for the repo you are in
-walkaround ~/dev/app  # report for another repo
-walkaround --all      # every project Claude Code has touched
-walkaround --trend    # per-session table of derived indicators
-walkaround --json     # same data, machine-readable
+walkaround              # report for the repo you are in
+walkaround ~/dev/app    # report for another repo
+walkaround --all        # every project Claude Code has touched
+walkaround --trend      # per-session table of derived indicators
+walkaround --subagents  # one row per subagent transcript, costliest first
+walkaround --json       # same data, machine-readable
 ```
 
 `--trend` reduces each session to comparable indicators — output tokens bought per human prompt, failed calls per 100 tool calls, test runs (and failures), read/write calls, subagent transcripts, top-churn file — so you can watch how your sessions evolve over time. It combines with `--all` and `--json`.
+
+`--subagents` expands the subagent rollup into a per-transcript table — parent session, model, duration, output tokens, tool calls, errors, lines written, files touched, retry chains, top tools and top-churn file — sorted by output tokens descending, with the usual rollup totals at the bottom. It combines with `--all` and `--json` (per-subagent entries land in a `subagents` array in the JSON structure).
 
 Sessions are matched to a repo by the `cwd` recorded *inside* each transcript, not by folder name — folder names under `~/.claude/projects` are lossy encodings and lie about paths containing dashes.
 

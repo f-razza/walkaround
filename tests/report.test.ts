@@ -100,6 +100,29 @@ describe("renderTrend", () => {
   });
 });
 
+describe("subagent detail", () => {
+  it("renders and serializes only when the report carries detail", () => {
+    const plain = fullReport();
+    expect(renderText(plain)).not.toContain("subagent detail");
+    expect(reportToJson(plain) as Record<string, unknown>).not.toHaveProperty("subagents");
+
+    const withDetail: RepoReport = {
+      ...fullReport(),
+      subagents: [{ parentShortId: "aaaaaaaa", metrics: metricsFor("happy.jsonl") }],
+    };
+    const text = renderText(withDetail);
+    expect(text).toContain("subagent detail");
+    expect(text).toContain("total: ");
+    const json = reportToJson(withDetail) as { subagents: unknown[] };
+    expect(json.subagents).toHaveLength(1);
+  });
+
+  it("prints an honest line for an empty detail list", () => {
+    const withEmpty: RepoReport = { ...fullReport(), subagents: [] };
+    expect(renderText(withEmpty)).toContain("no subagent transcripts under these sessions");
+  });
+});
+
 describe("degenerate input", () => {
   it("renders a session with no events without crashing", () => {
     const empty = computeSessionMetrics(parseSession(""), "/fake/empty.jsonl");

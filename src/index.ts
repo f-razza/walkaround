@@ -37,6 +37,7 @@ export {
   trendRows,
   trendToJson,
   type RepoReport,
+  type SubagentDetail,
   type TrendRow,
 } from "./report.js";
 export type {
