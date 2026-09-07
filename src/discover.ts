@@ -91,9 +91,11 @@ export async function inspectSessionFile(filePath: string): Promise<SessionFileI
 }
 
 /**
- * Subagent transcripts attached to a session: every *.jsonl under
+ * Subagent transcripts attached to a session: every agent-*.jsonl under
  * <session-dir>/<session-name>/subagents/, recursively. Two layouts exist
- * in the wild: flat agent-*.jsonl and workflows/<id>/agent-*.jsonl.
+ * in the wild: flat agent-*.jsonl and workflows/<id>/agent-*.jsonl. The
+ * workflows dirs also hold journal.jsonl, a structured run log and not a
+ * conversation: counting it would add rows that are empty by construction.
  */
 export async function listSubagentFiles(sessionFilePath: string): Promise<string[]> {
   const base = sessionFilePath.replace(/\.jsonl$/, "");
@@ -109,7 +111,9 @@ export async function listSubagentFiles(sessionFilePath: string): Promise<string
     for (const entry of entries) {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) await walk(full);
-      else if (entry.isFile() && entry.name.endsWith(".jsonl")) found.push(full);
+      else if (entry.isFile() && entry.name.startsWith("agent-") && entry.name.endsWith(".jsonl")) {
+        found.push(full);
+      }
     }
   }
   await walk(root);

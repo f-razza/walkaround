@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -233,6 +233,10 @@ function buildTwoSubagentProjects(): string {
   mkdirSync(subDir, { recursive: true });
   copyFileSync(fixturePath("subagent.jsonl"), join(subDir, "agent-1.jsonl"));
   copyFileSync(fixturePath("subagent-busy.jsonl"), join(subDir, "agent-2.jsonl"));
+  // A workflow run writes a journal beside its agents: a run log, not a transcript.
+  const wfDir = join(subDir, "workflows", "wf_synthetic");
+  mkdirSync(wfDir, { recursive: true });
+  writeFileSync(join(wfDir, "journal.jsonl"), '{"type":"journal","step":"start"}\n');
   return join(root, "projects");
 }
 
@@ -270,8 +274,10 @@ describe("main --subagents", () => {
     expect(r.stdout).toMatch(
       /aaaaaaaa\s+agent-2\s+claude-test-maxi\s+2 min\s+300\s+2\s+1\/0\s+3\/0\s+1\s+0\s+Bash x1, Write x1 \| src\/busy\.ts x1/,
     );
-    // The totals line matches what the rollup already reports today.
+    // The totals line matches what the rollup already reports today, and the
+    // workflow journal beside the agents is not one of the transcripts.
     expect(r.stdout).toContain("total: 2 transcripts | in 40 | out 330 | 4 calls | 1 error");
+    expect(r.stdout).not.toContain("journal");
   });
 
   it("keeps the default output free of the detail section", async () => {

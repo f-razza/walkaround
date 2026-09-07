@@ -94,6 +94,31 @@ function subagentsLine(sub: SubagentRollup): string {
   ].join(" | ");
 }
 
+/**
+ * Transcripts that produced nothing, split by why. An empty `models` list
+ * means no assistant turn ever came back, so the request never reached the
+ * model: an api error there is the quota wall, its absence a manual stop.
+ * Only the third bucket is waste — tokens spent for no output, no call.
+ */
+export interface SubagentOutcomes {
+  rateLimited: number;
+  interrupted: number;
+  producedNothing: number;
+}
+
+export function subagentOutcomes(entries: SubagentDetail[]): SubagentOutcomes {
+  const outcomes: SubagentOutcomes = { rateLimited: 0, interrupted: 0, producedNothing: 0 };
+  for (const { metrics: m } of entries) {
+    if (m.models.length === 0) {
+      if (m.errors.apiErrors > 0) outcomes.rateLimited++;
+      else outcomes.interrupted++;
+    } else if (m.tokens.output === 0 && m.totalToolCalls === 0) {
+      outcomes.producedNothing++;
+    }
+  }
+  return outcomes;
+}
+
 /** Transcript file name without extension: agent-<id> for real subagents. */
 function transcriptName(filePath: string): string {
   const base = filePath.split("/").pop() ?? filePath;
@@ -165,6 +190,11 @@ function subagentsSection(entries: SubagentDetail[], rollup: SubagentRollup, rep
     );
   }
   out.push(`  total: ${subagentsLine(rollup)}`);
+  const outcomes = subagentOutcomes(entries);
+  const outcome = (label: string, n: number) => `  ${label.padEnd(38)}${formatInt(n).padStart(7)}`;
+  out.push(outcome("never reached the model | rate limit", outcomes.rateLimited));
+  out.push(outcome("never reached the model | interrupted", outcomes.interrupted));
+  out.push(outcome("reached the model, produced nothing", outcomes.producedNothing));
   return out.join("\n");
 }
 

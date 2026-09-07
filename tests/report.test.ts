@@ -2,7 +2,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { aggregateMetrics, computeSessionMetrics } from "../src/metrics.js";
 import { parseSession } from "../src/parser.js";
-import { renderText, renderTrend, reportToJson, trendRows, type RepoReport } from "../src/report.js";
+import {
+  renderText,
+  renderTrend,
+  reportToJson,
+  subagentOutcomes,
+  trendRows,
+  type RepoReport,
+  type SubagentDetail,
+} from "../src/report.js";
 
 const metricsFor = (name: string) =>
   computeSessionMetrics(
@@ -120,6 +128,43 @@ describe("subagent detail", () => {
   it("prints an honest line for an empty detail list", () => {
     const withEmpty: RepoReport = { ...fullReport(), subagents: [] };
     expect(renderText(withEmpty)).toContain("no subagent transcripts under these sessions");
+  });
+});
+
+describe("subagentOutcomes", () => {
+  const detail = (name: string): SubagentDetail => ({
+    parentShortId: "aaaaaaaa",
+    metrics: metricsFor(name),
+  });
+
+  it("splits the transcripts that produced nothing by why", () => {
+    expect(
+      subagentOutcomes([
+        detail("subagent.jsonl"),
+        detail("subagent-ratelimited.jsonl"),
+        detail("subagent-interrupted.jsonl"),
+      ]),
+    ).toEqual({ rateLimited: 1, interrupted: 1, producedNothing: 0 });
+  });
+
+  it("counts a transcript that reached the model and returned nothing as waste", () => {
+    // quirks has an assistant turn with a model but no output and no tool call.
+    const quirks = metricsFor("quirks.jsonl");
+    expect(quirks.models.length).toBeGreaterThan(0);
+    expect(quirks.totalToolCalls).toBe(0);
+    expect(
+      subagentOutcomes([{ parentShortId: "bbbbbbbb", metrics: { ...quirks, tokens: { ...quirks.tokens, output: 0 } } }]),
+    ).toEqual({ rateLimited: 0, interrupted: 0, producedNothing: 1 });
+  });
+
+  it("prints the three buckets under the totals line", () => {
+    const text = renderText({
+      ...fullReport(),
+      subagents: [detail("subagent-ratelimited.jsonl"), detail("subagent-interrupted.jsonl")],
+    });
+    expect(text).toMatch(/never reached the model \| rate limit\s+1/);
+    expect(text).toMatch(/never reached the model \| interrupted\s+1/);
+    expect(text).toMatch(/reached the model, produced nothing\s+0/);
   });
 });
 

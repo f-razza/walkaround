@@ -122,9 +122,12 @@ describe("listSubagentFiles", () => {
     const nested = join(dirA, "s1", "subagents", "workflows", "wf_synthetic");
     mkdirSync(nested, { recursive: true });
     writeFileSync(join(nested, "agent-y.jsonl"), userLine("s1", "/synthetic/repo-a"));
+    // A workflow run also writes journal.jsonl: a run log, not a conversation.
+    writeFileSync(join(nested, "journal.jsonl"), line({ type: "journal", step: "start" }));
     const files = await listSubagentFiles(join(dirA, "s1.jsonl"));
     const names = files.map((f) => f.split("/").pop());
     expect(names).toEqual(["agent-y.jsonl", "agent-x.jsonl"].sort());
+    expect(names).not.toContain("journal.jsonl");
   });
 
   it("returns [] when the session has no subagents directory", async () => {

@@ -52,7 +52,7 @@ walkaround --json       # same data, machine-readable
 
 `--trend` reduces each session to comparable indicators — output tokens bought per human prompt, failed calls per 100 tool calls, test runs (and failures), read/write calls, subagent transcripts, top-churn file — so you can watch how your sessions evolve over time. It combines with `--all` and `--json`.
 
-`--subagents` expands the subagent rollup into a per-transcript table — parent session, model, duration, output tokens, tool calls, errors, lines written, files touched, retry chains, top tools and top-churn file — sorted by output tokens descending, with the usual rollup totals at the bottom. It combines with `--all` and `--json` (per-subagent entries land in a `subagents` array in the JSON structure).
+`--subagents` expands the subagent rollup into a per-transcript table — parent session, model, duration, output tokens, tool calls, errors, lines written, files touched, retry chains, top tools and top-churn file — sorted by output tokens descending, with the usual rollup totals at the bottom. Under the totals, the transcripts that produced nothing are split three ways: `never reached the model | rate limit` (no model turn, an API error — the request was refused before generating), `never reached the model | interrupted` (no model turn, no API error — stopped by hand), and `reached the model, produced nothing` (a model turn, zero output tokens, zero tool calls). Only the third is waste. It combines with `--all` and `--json` (per-subagent entries land in a `subagents` array in the JSON structure).
 
 Sessions are matched to a repo by the `cwd` recorded *inside* each transcript, not by folder name — folder names under `~/.claude/projects` are lossy encodings and lie about paths containing dashes.
 
@@ -74,7 +74,7 @@ Per session, and aggregated across sessions:
 | retry chains | Runs of >= 2 consecutive failed results for the same tool on the same file |
 | sidechain | Share of events flagged as sidechain (subagent) traffic |
 | mcp | Tool calls routed to MCP servers (`mcp__` name prefix or MCP attribution fields) |
-| subagents | Rollup of the session's subagent transcripts (`<session>/subagents/`, recursively): transcript count, tokens, tool calls, files, lines written, test runs, errors. Kept apart from the headline numbers so the main transcript stays comparable across sessions |
+| subagents | Rollup of the session's subagent transcripts (`agent-*.jsonl` under `<session>/subagents/`, recursively; a workflow's `journal.jsonl` is a run log, not a conversation, and is skipped): transcript count, tokens, tool calls, files, lines written, test runs, errors. Kept apart from the headline numbers so the main transcript stays comparable across sessions |
 | skipped | Non-metric event lines, counted by type; unknown types and malformed lines are counted too, never a crash |
 
 The report header states the Claude Code version range observed in the data, because the transcript schema drifts across versions.

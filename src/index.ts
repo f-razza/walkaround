@@ -34,10 +34,12 @@ export {
   renderText,
   renderTrend,
   reportToJson,
+  subagentOutcomes,
   trendRows,
   trendToJson,
   type RepoReport,
   type SubagentDetail,
+  type SubagentOutcomes,
   type TrendRow,
 } from "./report.js";
 export type {
