@@ -1,6 +1,6 @@
 {
   "name": "walkaround",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Post-flight inspection for AI coding sessions: parse Claude Code transcripts and report what the agent actually did to your codebase.",
   "keywords": [
     "claude-code",
